@@ -297,7 +297,7 @@ module PyPI
       name = normalize_python_package(package["metadata"]["name"])
       version = package["metadata"]["version"]
       # Checksums are formatted as `sha256=hexdigest``
-      checksum = package["download_info"]["hash"].split("=")[1]
+      checksum = package["download_info"]["archive_info"]["hash"].split("=")[1]
       pypi_info = [name, package["download_info"]["url"], checksum, version]
 
       package = Package.new "#{name}==#{version}", pypi_info: pypi_info
