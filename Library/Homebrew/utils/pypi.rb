@@ -14,9 +14,9 @@ module PyPI
   class Package
     attr_accessor :name, :extras, :version
 
-    sig { params(package_string: String, is_url: T::Boolean).void }
-    def initialize(package_string, is_url: false)
-      @pypi_info = nil
+    sig { params(package_string: String, is_url: T::Boolean, pypi_info: T.nilable(Hash)).void }
+    def initialize(package_string, is_url: false, pypi_info: nil)
+      @pypi_info = pypi_info
 
       if is_url
         match = if package_string.start_with?(PYTHONHOSTED_URL_PREFIX)
@@ -44,7 +44,7 @@ module PyPI
     # Get name, URL, SHA-256 checksum, and latest version for a given PyPI package.
     sig { params(version: T.nilable(T.any(String, Version))).returns(T.nilable(T::Array[String])) }
     def pypi_info(version: nil)
-      return @pypi_info if @pypi_info.present? && version.blank?
+      return @pypi_info if @pypi_info.present?
 
       version ||= @version
       metadata_url = if version.present?
@@ -216,7 +216,7 @@ module PyPI
     ohai "Retrieving PyPI dependencies for \"#{input_packages.join(" ")}\"..." if !print_only && !silent
     command =
       [Formula["python"].bin/"python3", "-m", "pip", "install", "-q", "--dry-run", "--ignore-installed", "--report",
-       "/dev/stdout", *input_packages.map(&:to_s)]
+       "/dev/stdout", "--no-binary=:all:", *input_packages.map(&:to_s)]
     pip_output = Utils.popen_read({ "PIP_REQUIRE_VIRTUALENV" => "false" }, *command)
     unless $CHILD_STATUS.success?
       odie <<~EOS
@@ -296,8 +296,11 @@ module PyPI
     report["install"].map do |package|
       name = normalize_python_package(package["metadata"]["name"])
       version = package["metadata"]["version"]
+      # Checksums are formatted as `sha256=hexdigest``
+      checksum = package["download_info"]["hash"].split("=")[1]
+      pypi_info = [name, package["download_info"]["url"], checksum, version]
 
-      package = Package.new "#{name}==#{version}"
+      package = Package.new "#{name}==#{version}", pypi_info: pypi_info
 
       package if exclude_packages.exclude? package
     end.compact
